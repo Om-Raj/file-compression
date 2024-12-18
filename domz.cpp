@@ -9,7 +9,6 @@
 #define MAX_CHARS 256
 
 bool VERBOSE = false;
-std::string decoded;
 
 void calc_len_table(std::ifstream &in_file, std::vector<std::vector<char>> &len_table) {
     char c;
@@ -61,13 +60,13 @@ void calc_keys(std::map<std::string, char> &keys, std::vector<std::vector<char>>
     }
 }
 
-bool decode_char(std::string &buffer, int lookahead, std::map<std::string, char> &keys) {
+bool decode_char(std::ofstream &out_file, std::string &buffer, int lookahead, std::map<std::string, char> &keys) {
     std::string code;
     for (int i = 0; i < lookahead; i++) {
         code += buffer[i];
         auto it = keys.find(code);
         if (it != keys.end()) {
-            decoded += it->second;
+            out_file << it->second;
             buffer = buffer.substr(i+1);
             return true;
         }
@@ -75,7 +74,7 @@ bool decode_char(std::string &buffer, int lookahead, std::map<std::string, char>
     return false;
 }
 
-void decode(std::ifstream &in_file, std::vector<std::vector<char>> &len_table) {
+void decode(std::ifstream &in_file, std::string &out_path, std::vector<std::vector<char>> &len_table) {
     std::map<std::string, char> keys;
     calc_keys(keys, len_table);
 
@@ -83,13 +82,19 @@ void decode(std::ifstream &in_file, std::vector<std::vector<char>> &len_table) {
         for (auto [code, ch] : keys)
             std::cout << (ch == ' '? "SPACE" : (ch == '\n'? "NEWLINE" : std::string(1, ch))) << " : " << code << '\n';
 
+    std::ofstream out_file(out_path);
+    if (!out_file.is_open()) {
+        std::cerr << "OUT: " << out_path << std:: endl;
+        throw "Unable to create output file";
+    }
+
     std::string buffer;
     char c;
     while (in_file.get(c)) {
         std::bitset<8> bits(c);
         buffer += bits.to_string();
         while (buffer.size() >= 16) {   // padded 0's and padding count are present in the last 16 bits
-            if (!decode_char(buffer, len_table.size(), keys))
+            if (!decode_char(out_file, buffer, len_table.size(), keys))
                 throw "Unable to decompress. Invalid data.";
         }
     }
@@ -98,9 +103,11 @@ void decode(std::ifstream &in_file, std::vector<std::vector<char>> &len_table) {
     int padding = stoi(buffer.substr(rem - 8), nullptr, 2);
     buffer = buffer.substr(0, rem - padding - 8);
     while (buffer.size()) {
-        if (!decode_char(buffer, len_table.size(), keys))
+        if (!decode_char(out_file, buffer, len_table.size(), keys))
             throw "Unable to decompress. Invalid data.";
     }
+
+    out_file.close();
 }
 
 void decompress(std::string &in_path, std::string &out_path) {
@@ -121,15 +128,8 @@ void decompress(std::string &in_path, std::string &out_path) {
         }
     }
 
-    decode(in_file, len_table);
+    decode(in_file, out_path, len_table);
     in_file.close();
-
-    std::ofstream out_file(out_path);
-    if (!out_file.is_open()) {
-        std::cerr << "OUT: " << out_path << std:: endl;
-        throw "Unable to create output file";
-    }
-    out_file << decoded;
 }
 
 int main(int argc, char* argv[]) {

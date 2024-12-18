@@ -10,14 +10,13 @@
 #define MAX_CHARS 256
 
 bool VERBOSE = false;
-std::string encoded;
 
 typedef struct Node {
-    char data;
+    int data;
     int freq;
     Node *left, *right;
 
-    Node(char d, int f, Node *l, Node *r) : data(d), freq(f), left(l), right(r) {};
+    Node(int d, int f, Node *l, Node *r) : data(d), freq(f), left(l), right(r) {};
 } Node;
 
 typedef struct CompareNode {
@@ -26,18 +25,18 @@ typedef struct CompareNode {
     } 
 } CompareNode;
 
-void get_char_freq(std::string in_path, std::map<char, int> &freq) {
-    std::ifstream in_file(in_path);
+void get_char_freq(std::string in_path, std::map<unsigned char, int> &freq) {
+    std::ifstream in_file(in_path, std::ios::binary);
     if (!in_file.is_open())
         throw "Unable to read input file";
     char c;
-    while (in_file.get(c)) {
-        freq[c]++;
+    while (in_file.read(&c, sizeof(c))) {
+        freq[static_cast<unsigned char>(c)]++;
     }
     in_file.close();
 }
 
-Node* create_huff_tree(std::map<char, int> &freq) {
+Node* create_huff_tree(std::map<unsigned char, int> &freq) {
     std::priority_queue<Node*, std::vector<Node*>, CompareNode> pq;
     for (auto [ch, fq] : freq) {
         Node *node = new Node(ch, fq, nullptr, nullptr);
@@ -46,7 +45,7 @@ Node* create_huff_tree(std::map<char, int> &freq) {
     while (pq.size() > 1) {
         Node *a = pq.top(); pq.pop();
         Node *b = pq.top(); pq.pop();
-        Node *c = new Node('\0', a->freq + b->freq, a, b);
+        Node *c = new Node(-1, a->freq + b->freq, a, b);
         pq.push(c);
     }
     return pq.top();
@@ -61,13 +60,13 @@ void deallocate(Node *root) {
     if (root) {
         deallocate(root->left);
         deallocate(root->right);
-        free(root);
+        delete root;
     }
 }
 
-void calc_len_table(Node *root, std::vector<std::vector<char>> &len_table, int code_len) {
-    if (root->data != '\0') {
-        len_table[code_len-1].push_back(root->data);
+void calc_len_table(Node *root, std::vector<std::vector<unsigned char>> &len_table, int code_len) {
+    if (root->data != -1) {
+        len_table[code_len-1].push_back(static_cast<unsigned char>(root->data));
     } else {
         calc_len_table(root->left, len_table, code_len + 1);
         calc_len_table(root->right, len_table, code_len + 1);
@@ -86,7 +85,7 @@ void increment(std::bitset<MAX_CHARS> &code) {
     }
 }
 
-void calc_keys(std::map<char, std::string> &keys, std::vector<std::vector<char>> &len_table) {
+void calc_keys(std::map<unsigned char, std::string> &keys, std::vector<std::vector<unsigned char>> &len_table) {
     std::bitset<MAX_CHARS> code; // hard-coded values
     int code_len = 0;
     for (int i = 0; i < len_table.size(); i++) {
@@ -94,7 +93,7 @@ void calc_keys(std::map<char, std::string> &keys, std::vector<std::vector<char>>
             code <<= 1;
             code_len++;
         }
-        for (char c : len_table[i]) {
+        for (unsigned char c : len_table[i]) {
             std::string temp;
             for (int j = i; j >= 0; j--) {
                 temp += code.test(j)? '1': '0';
@@ -105,52 +104,65 @@ void calc_keys(std::map<char, std::string> &keys, std::vector<std::vector<char>>
     }
 }
 
-int bin_conv(std::string binstr) {
+char bin_conv(std::string binstr) {
     return stoi(binstr, nullptr, 2);
 }
 
-void encode(std::string &in_path, std::vector<std::vector<char>> &len_table) {
-    std::map<char, std::string> keys;
+void encode(std::string &in_path, std::string &out_path, std::vector<std::vector<unsigned char>> &len_table) {
+    std::map<unsigned char, std::string> keys;
     calc_keys(keys, len_table);
 
     if (VERBOSE)
         for (auto [ch, code] : keys)
             std::cout << (ch == ' '? "SPACE" : (ch == '\n'? "NEWLINE" : std::string(1, ch))) << " : " << code << '\n';
 
-    encoded += (char) len_table.size();
+    std::ofstream out_file(out_path, std::ios::binary);
+    if (!out_file.is_open())
+        throw "Unable to create output file";
 
-    for (int i = 0; i < len_table.size(); i++)
-        encoded += (char) len_table[i].size();
+    char byte = len_table.size();
+    out_file.write(&byte, sizeof(byte));
 
-    for (int i = 0; i < len_table.size(); i++)
-        for (const char &c : len_table[i])
-            encoded += c;
+    for (int i = 0; i < len_table.size(); i++) {
+        byte = len_table[i].size();
+        out_file.write(&byte, sizeof(byte));
+    }
 
-    std::ifstream in_file(in_path);
+    for (int i = 0; i < len_table.size(); i++) {
+        for (char const &c : len_table[i]) {
+            out_file.write(&c, sizeof(c));
+        }
+    }
+
+    std::ifstream in_file(in_path, std::ios::binary);
     if (!in_file.is_open())
         throw "Unable to read input file";
 
     std::string buffer;
     char c;
-    while (in_file.get(c)) {
-        buffer += keys[c];
+    while (in_file.read(&c, sizeof(c))) {
+        buffer += keys[static_cast<unsigned char>(c)];
         while (buffer.size() >= 8) {
-            encoded += (char) bin_conv(buffer.substr(0, 8));
+            byte = bin_conv(buffer.substr(0, 8));
+            out_file.write(&byte, sizeof(byte));
             buffer = buffer.substr(8);
         }
     }
     in_file.close();
 
-    int padding = 8 - buffer.size();
+    char padding = 8 - buffer.size();
     if (padding < 8) {
         buffer.append(padding, '0');
-        encoded += (char) bin_conv(buffer);
+        byte = bin_conv(buffer);
+        out_file.write(&byte, sizeof(byte));
     }
-    encoded += (char) padding;
+    out_file.write(&padding, sizeof(padding));
+
+    out_file.close();
 }
 
 void compress(std::string &in_path, std::string &out_path) {
-    std::map<char, int> freq;
+    std::map<unsigned char, int> freq;
     get_char_freq(in_path, freq); 
     if (freq.empty())
         throw "Empty input file";
@@ -158,7 +170,7 @@ void compress(std::string &in_path, std::string &out_path) {
     Node *huff_tree = create_huff_tree(freq);
     int huff_tree_height = get_tree_height(huff_tree);
 
-    std::vector<std::vector<char>> len_table(huff_tree_height);
+    std::vector<std::vector<unsigned char>> len_table(huff_tree_height);
     if (huff_tree_height) {
         calc_len_table(huff_tree, len_table, 0);
     } else {
@@ -177,13 +189,10 @@ void compress(std::string &in_path, std::string &out_path) {
 
     deallocate(huff_tree);
 
-    encode(in_path, len_table);
-
-    std::ofstream out_file(out_path);
-    if (!out_file.is_open())
-        throw "Unable to create output file";
-    
-    out_file << encoded;
+    if (len_table[7].size() == 256) // all characters are equally likely
+        throw "Cannot compress further. All characters have same length codes.";
+    else
+        encode(in_path, out_path, len_table);
 }
 
 int main(int argc, char* argv[]) {
