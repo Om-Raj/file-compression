@@ -43,4 +43,4 @@ file.txt.dec
 ```
 
 ## Why `.omz` file?
-While writing the code I didn't want to write long name generic name such as compressor / decompressor. So i went with these short names which actually feature my name **Om**. ;-)
+While writing the code I didn't want to write long name generic name such as compressor / decompressor. So i went with these short names which actually feature my name **Om**. 😉
