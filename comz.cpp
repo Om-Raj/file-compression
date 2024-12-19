@@ -13,11 +13,12 @@
 bool VERBOSE = false;
 
 typedef struct Node {
-    int data;
+    unsigned char data;
+    bool leaf;
     int freq;
     Node *left, *right;
 
-    Node(int d, int f, Node *l, Node *r) : data(d), freq(f), left(l), right(r) {};
+    Node(unsigned char d, bool _leaf, int f, Node *l, Node *r) : data(d), leaf(_leaf), freq(f), left(l), right(r) {};
 } Node;
 
 typedef struct CompareNode {
@@ -40,13 +41,13 @@ void get_char_freq(std::string in_path, std::map<unsigned char, int> &freq) {
 Node* create_huff_tree(std::map<unsigned char, int> &freq) {
     std::priority_queue<Node*, std::vector<Node*>, CompareNode> pq;
     for (auto [ch, fq] : freq) {
-        Node *node = new Node(ch, fq, nullptr, nullptr);
+        Node *node = new Node(ch, true, fq, nullptr, nullptr);
         pq.push(node);
     }
     while (pq.size() > 1) {
         Node *a = pq.top(); pq.pop();
         Node *b = pq.top(); pq.pop();
-        Node *c = new Node(-1, a->freq + b->freq, a, b);
+        Node *c = new Node(-1, false, a->freq + b->freq, a, b);
         pq.push(c);
     }
     return pq.top();
@@ -66,7 +67,7 @@ void deallocate(Node *root) {
 }
 
 void calc_len_table(Node *root, std::vector<std::vector<unsigned char>> &len_table, int code_len) {
-    if (root->data != -1) {
+    if (root->leaf) {
         len_table[code_len-1].push_back(static_cast<unsigned char>(root->data));
     } else {
         calc_len_table(root->left, len_table, code_len + 1);
