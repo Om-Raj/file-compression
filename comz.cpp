@@ -6,6 +6,7 @@
 #include <map>
 #include <queue>
 #include <vector>
+#include <algorithm>
 
 #define MAX_CHARS 256
 
@@ -173,6 +174,8 @@ void compress(std::string &in_path, std::string &out_path) {
     std::vector<std::vector<unsigned char>> len_table(huff_tree_height);
     if (huff_tree_height) {
         calc_len_table(huff_tree, len_table, 0);
+        for (std::vector<unsigned char> &row : len_table)
+            sort(row.begin(), row.end());
     } else {
         len_table = {{freq.begin()->first}}; // file contains only 1 type of character
     }
